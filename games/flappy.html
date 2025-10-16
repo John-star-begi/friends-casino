@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>Flappy Fiasco — Multiplier Mode 🐤</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="../css/styles.css" />
+  <style>
+    .game-wrap{ position:relative; width:min(95vw,720px); margin-inline:auto; }
+    canvas{ border:2px solid #6a1b9a; border-radius:16px; box-shadow:0 0 25px rgba(187,134,252,.5), inset 0 0 10px rgba(33,150,243,.35); background:#061026; width:100%; height:auto; }
+    .hud { position:absolute; left:14px; top:12px; font-weight:700; }
+    .hud .row{ display:flex; gap:14px; align-items:center; flex-wrap:wrap; }
+    .hud .pill{ padding:6px 10px; border-radius:999px; border:1px solid #6a1b9a; background:rgba(25,0,45,.6); box-shadow:0 0 10px rgba(187,134,252,.4); }
+    .hud .meter{ width:100px; height:10px; border:1px solid #03a9f4; border-radius:999px; overflow:hidden; }
+    .hud .meter > div{ height:100%; width:0%; background:linear-gradient(90deg,#7f39fb,#03a9f4); }
+    .controls { display:flex; gap:10px; flex-wrap:wrap; justify-content:center; margin:14px 0 6px; }
+    .controls input[type=number]{ width:120px; padding:8px; border-radius:10px; border:1px solid #6a1b9a; background:rgba(25,0,45,.6); color:#e0e0ff; text-align:center; }
+    .overlay{
+      position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+      flex-direction:column; gap:14px; text-align:center; padding:16px;
+      background:linear-gradient(180deg, rgba(10,0,24,.55), rgba(4,0,18,.65));
+      backdrop-filter: blur(2px);
+    }
+    .overlay h1{ margin:0; }
+    .notes{ font-size:.9rem; opacity:.8; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Flappy Fiasco — Multiplier Mode 🐤</h1>
+    <p>Place a bet → fly → multiplier rises. Cash out anytime. Crash = lose bet.</p>
+
+    <!-- Bet + Action controls -->
+    <div class="controls">
+      <span class="pill">Tokens: <strong id="tokens">0</strong></span>
+      <label>
+        Bet:
+        <input id="betInput" type="number" min="1" step="1" value="10" />
+      </label>
+      <button onclick="FF.setBet(10)">10</button>
+      <button onclick="FF.setBet(25)">25</button>
+      <button onclick="FF.setBet(50)">50</button>
+      <button onclick="FF.setBet('max')">Max</button>
+      <button id="startBtn" onclick="FF.startGame()">Start</button>
+      <button id="cashBtn" onclick="FF.cashOut()" disabled>💰 Cash Out</button>
+      <button onclick="window.location='../index.html'">⬅️ Lobby</button>
+    </div>
+
+    <div class="game-wrap">
+      <canvas id="game" width="640" height="360" aria-label="Flappy Fiasco canvas"></canvas>
+
+      <!-- HUD -->
+      <div class="hud">
+        <div class="row">
+          <div class="pill">Multiplier: <span id="mult">1.00×</span></div>
+          <div class="pill">Distance: <span id="dist">0</span> m</div>
+          <div class="pill">Clears: <span id="clears">0</span></div>
+        </div>
+        <div class="row" style="margin-top:8px">
+          <div class="pill">Wind</div>
+          <div class="meter"><div id="windbar"></div></div>
+          <div id="windDir" class="pill">–</div>
+          <div class="pill notes">Tap/Click/Space to flap • M to mute</div>
+        </div>
+      </div>
+
+      <!-- Start / GameOver overlays -->
+      <div id="startOverlay" class="overlay" role="dialog" style="display:none">
+        <h1>Tap to Start</h1>
+        <p class="notes">Place your bet above, then press Start.</p>
+      </div>
+
+      <div id="overOverlay" class="overlay" role="dialog" style="display:none">
+        <h1 id="overTitle">Round Over</h1>
+        <p id="overCaption" class="notes"></p>
+        <p><strong>Bet:</strong> <span id="overBet">0</span> • <strong>Payout:</strong> <span id="overPayout">0</span></p>
+        <div>
+          <button onclick="FF.startGame()">Play Again</button>
+          <button onclick="window.location='../index.html'">Lobby</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="../js/common.js"></script>
+  <script src="../js/flappy.js"></script>
+</body>
+</html>

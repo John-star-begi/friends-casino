@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>Friends Casino 🎰</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="css/styles.css" />
+  <style>
+    /* --- Extra style for the homepage --- */
+
+    body {
+      font-family: 'Rajdhani', sans-serif;
+      background: radial-gradient(circle at center, #090018 0%, #03000a 100%);
+      color: #e0e0ff;
+      text-align: center;
+      min-height: 100vh;
+      padding: 40px 20px;
+    }
+
+    h1 {
+      font-size: 3rem;
+      color: #bb86fc;
+      text-shadow: 0 0 25px #7f39fb, 0 0 40px #3700b3;
+      margin-bottom: 30px;
+    }
+
+    /* Grid for thumbnails */
+    .game-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 25px;
+      justify-items: center;
+    }
+
+    /* Each game card box */
+    .game-card {
+      width: 240px;
+      background: rgba(25, 0, 45, 0.7);
+      border: 2px solid #6a1b9a;
+      border-radius: 16px;
+      padding: 16px;
+      box-shadow: 0 0 25px rgba(187, 134, 252, 0.5);
+      transition: transform 0.3s ease, box-shadow 0.3s ease;
+      cursor: pointer;
+    }
+
+    /* Hover (when mouse over) */
+    .game-card:hover {
+      transform: scale(1.05);
+      box-shadow: 0 0 40px #bb86fc, 0 0 60px #03a9f4;
+    }
+
+    /* Thumbnail image */
+    .game-thumb {
+      width: 100%;
+      border-radius: 12px;
+      box-shadow: 0 0 15px rgba(0, 229, 255, 0.4);
+      margin-bottom: 10px;
+    }
+
+    /* Game title text */
+    .game-title {
+      font-size: 1.4rem;
+      color: #64b5f6;
+      text-shadow: 0 0 10px #03a9f4;
+    }
+
+    footer {
+      margin-top: 40px;
+      font-size: 0.9rem;
+      color: #888;
+    }
+  </style>
+</head>
+
+<body>
+  <h1>Friends Crypto Casino 🎰</h1>
+  <p>Select a game below</p>
+
+  <!-- Game Grid -->
+  <div class="game-grid">
+
+    <!-- Rock Paper Scissors -->
+    <div class="game-card" onclick="window.location='games/rps.html'">
+      <img class="game-thumb" src="assets/thumb_rps.png" alt="Rock Paper Scissors">
+      <div class="game-title">✂️ Rock Paper Scissors</div>
+    </div>
+
+    <!-- Slot Machine -->
+    <div class="game-card" onclick="window.location='games/slots.html'">
+      <img class="game-thumb" src="assets/thumb_slots.png" alt="Slot Machine">
+      <div class="game-title">🎰 Slot Machine</div>
+    </div>
+
+    <!-- Flappy Fiasco -->
+    <div class="game-card" onclick="window.location='games/flappy.html'">
+      <img class="game-thumb" src="assets/thumb_flappy.png" alt="Flappy Fiasco">
+      <div class="game-title">🐤 Flappy Fiasco</div>
+    </div>
+
+  </div>
+
+  <footer>
+    All games are for entertainment only — no real money or prizes.
+  </footer>
+</body>
+</html>
