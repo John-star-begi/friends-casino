@@ -1,24 +1,19 @@
 // ============================
-// 🐤 FLAPPY FIASCO - MULTIPLIER MODE
+// 🐤 FLAPPY FIASCO - MULTIPLIER MODE (FINAL WORKING BUILD)
 // ============================
 
-// --- Utility Functions (must come first for hoisting) ---
+// --- Utility Functions ---
 function randr(min, max) {
   return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 function randf(min, max) {
   return Math.random() * (max - min) + min;
 }
-function clamp(value, min, max) {
-  return Math.min(Math.max(value, min), max);
-}
 function playSound(name) {
-  console.log("Play sound:", name); // placeholder for sound logic
+  console.log("Play sound:", name); // placeholder
 }
 
-// ============================
-// 🎮 Main Game Object
-// ============================
+// --- Main Game Object ---
 window.FF = {
   canvas: null,
   ctx: null,
@@ -26,32 +21,52 @@ window.FF = {
   bet: 0,
   tokens: 0,
   multiplier: 1.0,
+  clears: 0,
   bird: { x: 100, y: 200, vy: 0, alive: true },
   gravity: 0.5,
   flapForce: -7,
   pipes: [],
   distance: 0,
-  wind: { dir: 0, strength: 0 },
-  hunter: { x: -200, timer: 0 },
   lastTime: 0,
 
   // === INIT ===
   init: function () {
-    this.canvas = document.getElementById("gameCanvas");
+    this.canvas = document.getElementById("game");
     this.ctx = this.canvas.getContext("2d");
-    this.resizeCanvas();
 
     window.addEventListener("resize", this.resizeCanvas.bind(this));
     window.addEventListener("mousedown", this.flap.bind(this));
-    window.addEventListener("keydown", e => { if (e.code === "Space") this.flap(); });
+    window.addEventListener("keydown", (e) => {
+      if (e.code === "Space") this.flap();
+    });
 
-    this.tokens = Number(localStorage.getItem("tokens") || 1000);
+    this.resizeCanvas();
+
+    this.tokens = Number(localStorage.getItem("tokens")) || 100;
     this.updateTokens();
-    this.renderStartScreen();
+    this.showStartOverlay(true);
+    this.updateUI();
   },
 
-  // === Start a New Game ===
+  // === Place Bet ===
+  placeBet: function (amount) {
+    const betInput = document.getElementById("betInput");
+
+    if (amount === "max") {
+      this.bet = this.tokens;
+      betInput.value = this.tokens;
+    } else {
+      this.bet = Number(amount);
+      betInput.value = amount;
+    }
+    console.log("Bet set to:", this.bet);
+  },
+
+  // === Start Game ===
   startGame: function () {
+    const inputBet = Number(document.getElementById("betInput").value);
+    this.bet = inputBet > 0 ? inputBet : this.bet;
+
     if (this.bet <= 0) {
       alert("Please place a bet first!");
       return;
@@ -66,6 +81,7 @@ window.FF = {
 
     this.running = true;
     this.multiplier = 1.0;
+    this.clears = 0;
     this.distance = 0;
     this.pipes = [];
     this.bird.y = this.canvas.height / 2;
@@ -73,6 +89,10 @@ window.FF = {
     this.bird.alive = true;
     this.lastTime = performance.now();
 
+    document.getElementById("startBtn").disabled = true;
+    document.getElementById("cashBtn").disabled = false;
+
+    this.showStartOverlay(false);
     requestAnimationFrame(this.gameLoop.bind(this));
   },
 
@@ -85,6 +105,7 @@ window.FF = {
 
     this.update(delta);
     this.draw();
+    this.updateUI();
 
     requestAnimationFrame(this.gameLoop.bind(this));
   },
@@ -95,16 +116,17 @@ window.FF = {
     this.bird.y += this.bird.vy * delta;
 
     // spawn pipes
-    if (this.distance % 120 === 0) this.spawnPipe();
+    if (Math.floor(this.distance) % 100 === 0) this.spawnPipe();
 
     // move pipes
     for (let p of this.pipes) p.x -= 3;
-    this.pipes = this.pipes.filter(p => p.x > -80);
+    this.pipes = this.pipes.filter((p) => p.x > -80);
 
-    // collision check
+    // collision detection
     for (let p of this.pipes) {
       if (
-        this.bird.x + 20 > p.x && this.bird.x < p.x + 60 &&
+        this.bird.x + 15 > p.x &&
+        this.bird.x < p.x + 60 &&
         (this.bird.y < p.top || this.bird.y > p.bottom)
       ) {
         this.crash();
@@ -118,27 +140,30 @@ window.FF = {
       return;
     }
 
+    // score logic
     this.distance += delta * 2;
     this.multiplier += 0.001 * delta;
-    document.getElementById("multiplier").textContent = this.multiplier.toFixed(2) + "x";
+    if (this.distance % 60 === 0) this.clears++;
+
+    // update UI continuously
+    this.updateUI();
   },
 
-  // === Drawing ===
+  // === Draw Everything ===
   draw: function () {
     const ctx = this.ctx;
     ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
 
-    // background
     const gradient = ctx.createLinearGradient(0, 0, 0, this.canvas.height);
-    gradient.addColorStop(0, "#1e0033");
-    gradient.addColorStop(1, "#000000");
+    gradient.addColorStop(0, "#150033");
+    gradient.addColorStop(1, "#000");
     ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
 
     // bird
     ctx.fillStyle = "#FFD700";
     ctx.beginPath();
-    ctx.arc(this.bird.x, this.bird.y, 12, 0, Math.PI * 2);
+    ctx.arc(this.bird.x, this.bird.y, 10, 0, Math.PI * 2);
     ctx.fill();
 
     // pipes
@@ -147,13 +172,6 @@ window.FF = {
       ctx.fillRect(p.x, 0, 60, p.top);
       ctx.fillRect(p.x, p.bottom, 60, this.canvas.height - p.bottom);
     }
-
-    // HUD
-    ctx.fillStyle = "#fff";
-    ctx.font = "20px Rajdhani";
-    ctx.fillText("Bet: " + this.bet, 10, 25);
-    ctx.fillText("Tokens: " + this.tokens, 10, 50);
-    ctx.fillText("Multiplier: " + this.multiplier.toFixed(2) + "x", 10, 75);
   },
 
   // === Spawn Pipe ===
@@ -163,7 +181,7 @@ window.FF = {
     this.pipes.push({
       x: this.canvas.width,
       top: gapY - gapSize / 2,
-      bottom: gapY + gapSize / 2
+      bottom: gapY + gapSize / 2,
     });
   },
 
@@ -176,11 +194,22 @@ window.FF = {
 
   // === Crash ===
   crash: function () {
-    playSound("crash");
     this.running = false;
     this.bird.alive = false;
-    alert("💥 You crashed! Lost your bet of " + this.bet + " tokens.");
-    this.renderStartScreen();
+    playSound("crash");
+
+    const overlay = document.getElementById("overOverlay");
+    overlay.style.display = "flex";
+    document.getElementById("overTitle").textContent = "💥 You Crashed!";
+    document.getElementById("overCaption").textContent =
+      "That pipe had your name on it!";
+    document.getElementById("overBet").textContent = this.bet;
+    document.getElementById("overPayout").textContent = 0;
+
+    document.getElementById("startBtn").disabled = false;
+    document.getElementById("cashBtn").disabled = true;
+
+    this.updateTokens();
   },
 
   // === Cash Out ===
@@ -188,35 +217,47 @@ window.FF = {
     if (!this.running) return;
     const win = Math.floor(this.bet * this.multiplier);
     this.tokens += win;
+
     playSound("cashout");
     alert("💰 You cashed out with " + win + " tokens!");
-    this.running = false;
-    this.renderStartScreen();
-    this.updateTokens();
-  },
 
-  // === Betting ===
-  placeBet: function (amount) {
-    this.bet = amount;
-    document.getElementById("bet").textContent = amount;
+    document.getElementById("overTitle").textContent = "🏆 You Cashed Out!";
+    document.getElementById("overCaption").textContent =
+      "Great timing! You beat the odds.";
+    document.getElementById("overBet").textContent = this.bet;
+    document.getElementById("overPayout").textContent = win;
+    document.getElementById("overOverlay").style.display = "flex";
+
+    this.running = false;
+    document.getElementById("startBtn").disabled = false;
+    document.getElementById("cashBtn").disabled = true;
+    this.updateTokens();
   },
 
   // === Helpers ===
   resizeCanvas: function () {
-    this.canvas.width = window.innerWidth;
-    this.canvas.height = window.innerHeight * 0.7;
+    this.canvas.width = Math.min(window.innerWidth * 0.9, 720);
+    this.canvas.height = 360;
   },
+
   updateTokens: function () {
     localStorage.setItem("tokens", this.tokens);
     const el = document.getElementById("tokens");
     if (el) el.textContent = this.tokens;
   },
-  renderStartScreen: function () {
-    this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-    this.ctx.fillStyle = "#fff";
-    this.ctx.font = "30px Rajdhani";
-    this.ctx.fillText("Tap START to play Flappy Fiasco!", 100, this.canvas.height / 2);
-  }
+
+  updateUI: function () {
+    document.getElementById("mult").textContent = this.multiplier.toFixed(2) + "×";
+    document.getElementById("dist").textContent = Math.floor(this.distance);
+    document.getElementById("clears").textContent = this.clears;
+  },
+
+  showStartOverlay: function (show) {
+    const s = document.getElementById("startOverlay");
+    const o = document.getElementById("overOverlay");
+    s.style.display = show ? "flex" : "none";
+    o.style.display = "none";
+  },
 };
 
 // Initialize when page loads
