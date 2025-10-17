@@ -274,16 +274,19 @@ window.FF = (()=>{
     });
   }
 
-  /* ---------- Hunter & Wind ---------- */
   function updateHunter(dt, tier){
-    // lazy follow
-    hunter.y += (bird.y - hunter.y) * 0.02;
-    hunter.throwTimer -= dt;
-    if(hunter.throwTimer<=0){
-      throwProjectile(tier);
-      hunter.throwTimer = randf(THROW_MIN,THROW_MAX) / tier.throws;
-    }
+  // Always stay fixed distance behind bird
+  const TARGET_OFFSET = 180; // pixels behind
+  hunter.x = bird.x - TARGET_OFFSET;
+  hunter.y += (bird.y - hunter.y) * 0.1; // follow smoothly on Y only
+
+  hunter.throwTimer -= dt;
+  if (hunter.throwTimer <= 0) {
+    throwProjectile(tier);
+    hunter.throwTimer = randf(THROW_MIN, THROW_MAX) / tier.throws;
   }
+}
+
 
   function throwProjectile(tier){
     const types = ['boot','hat','pie','goldenEgg'];
@@ -462,4 +465,5 @@ window.FF = (()=>{
 
 /* ---------- Boot ---------- */
 window.addEventListener('load', ()=>FF.init());
+
 
