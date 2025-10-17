@@ -192,7 +192,8 @@ window.FF = (()=>{
 
     // integrate
     bird.y += bird.vy * dt;
-    bird.x = clamp(bird.x + bird.vx * dt, 40, W-40);
+    bird.x = W * 0.25; // keep bird fixed horizontally (¼ from left edge)
+bird.vx = 0; // neutralize any horizontal drift
 
     // bounds
     if(bird.y + bird.r >= H-8){ return crash('Face-planted the runway!'); }
@@ -465,5 +466,6 @@ window.FF = (()=>{
 
 /* ---------- Boot ---------- */
 window.addEventListener('load', ()=>FF.init());
+
 
 
