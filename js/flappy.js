@@ -1,15 +1,21 @@
 /* ============================
-   FLAPPY FIASCO — MULTIPLIER + HUNTER + WIND (FINAL)
-   Works with flappy.html you shared.
+   FLAPPY FIASCO — CLEAN BUILD
+   - Fixed global FF
+   - No tilt, no clouds
+   - Fixed hunter offset
+   - Fixed bird X
+   - Distinct projectiles
+   - Mult starts at 0; block early cashout
+   - Admin hooks
    ============================ */
 
-/* ---------- Hoisted helpers ---------- */
+/* ---------- Small helpers (hoisted) ---------- */
 function clamp(v, min, max){ return Math.max(min, Math.min(max, v)); }
 function randChoice(a){ return a[Math.floor(Math.random()*a.length)]; }
 function randf(a,b){ return a + Math.random()*(b-a); }
 function randi(a,b){ return Math.floor(randf(a,b+1)); }
 
-/* Tiny audio beeps (no external files) */
+/* ---------- Tiny audio beeps (no external files) ---------- */
 const SFX = (()=>{ 
   let ac; let muted=false;
   function ensure(){ if(!ac) ac = new (window.AudioContext||window.webkitAudioContext)(); }
@@ -30,38 +36,49 @@ const SFX = (()=>{
   };
 })();
 
-/* ---------- Main game object ---------- */
-window.FF = (()=>{
-  // DOM
-  const cvs = document.getElementById('game');
-  const ctx = cvs.getContext('2d');
+/* ===========================================================
+   Create a global shell FIRST so inline onclick finds window.FF
+   =========================================================== */
+window.FF = {
+  // These will be wired up in init()
+  init: ()=>{},
+  setBet: ()=>{},
+  placeBet: ()=>{},
+  startGame: ()=>{},
+  cashOut: ()=>{},
+  applyAdmin: ()=>{}
+};
 
-  const elTokens = document.getElementById('tokens');
-  const elBet = document.getElementById('betInput');
-  const btnStart = document.getElementById('startBtn');
-  const btnCash  = document.getElementById('cashBtn');
+/* Wrap the whole game safely so we can assign methods after */
+(function(){
+  'use strict';
 
-  const elMult = document.getElementById('mult');
-  const elDist = document.getElementById('dist');
-  const elClears = document.getElementById('clears');
-  const elWindBar = document.getElementById('windbar');
-  const elWindDir = document.getElementById('windDir');
+  /* ---------- DOM refs (assigned in init) ---------- */
+  let cvs, ctx, W, H;
+  let elTokens, elBet, btnStart, btnCash;
+  let elMult, elDist, elClears, elWindBar, elWindDir;
+  let overWrap, overTitle, overCaption, overBet, overPayout;
 
-  const overWrap = document.getElementById('overOverlay');
-  const overTitle = document.getElementById('overTitle');
-  const overCaption = document.getElementById('overCaption');
-  const overBet = document.getElementById('overBet');
-  const overPayout = document.getElementById('overPayout');
+  /* ---------- Tunables / Admin-controlled defaults ---------- */
+  let GRAVITY = 900;          // px/s^2
+  let FLAP_FORCE = -320;      // px/s
+  let BASE_SPEED = 150;       // px/s world speed
 
-  // Constants
-  const W = cvs.width, H = cvs.height;
-  const GRAVITY = 900;          // px/s^2
-  const FLAP_FORCE = -320;      // px/s impulse
-  const BASE_SPEED = 150;       // base world speed (scales up)
-  const PIPE_GAP_BASE = 120;    // gap size
-  const PIPE_INTERVAL = 1.4;    // seconds between pipe pairs (scales)
-  const CLOUD_INTERVAL = 2.5;   // seconds
-  const THROW_MIN = 1.6, THROW_MAX = 3.4;
+  // Multiplier tuning (slower, per your request)
+  let MULT_START = 0.00;
+  let MULT_PER_PIPE = 0.03;
+  let MULT_PER_100M = 0.01;
+  let MULT_GOLDEN = 0.15;
+  let MULT_PER_SEC = 0.0015;
+
+  // Pipes
+  let PIPE_GAP_BASE = 120;
+  let PIPE_INTERVAL = 1.4;    // seconds between pairs
+
+  // Hunter / projectiles
+  let THROW_MIN = 1.6, THROW_MAX = 3.4;
+  let PROJECTILE_SPEED_MULT = 1.0;
+  const HUNTER_OFFSET = 180;  // px behind bird
 
   // Difficulty tiers over time
   const DIFF = [
@@ -72,15 +89,8 @@ window.FF = (()=>{
   ];
   function tierFor(t){ return DIFF.reduce((a,c)=>t>=c.t?c:a, DIFF[0]); }
 
-  // Multiplier tuning
-  const MULT_START = 0.00;
-  const MULT_PER_PIPE = 0.06;   // tougher game → slightly higher pipe boost
-  const MULT_PER_100M = 0.02;   // per 100m
-  const MULT_GOLDEN = 0.30;     // golden egg bonus
-  const MULT_PER_SEC = 0.0045;  // gentle drift per second (scaled by diff)
-
-  // State
-  let state = 'IDLE'; // IDLE|RUNNING|OVER
+  /* ---------- Game state ---------- */
+  let state = 'IDLE'; // IDLE | RUNNING | OVER
   let lastT = 0, elapsed = 0;
 
   let bet = 0;
@@ -89,76 +99,108 @@ window.FF = (()=>{
   let multiplier = MULT_START;
   let distance = 0, distSteps = 0, clears = 0;
 
-  let pipes = [];     // store as pairs: top & bottom with same x
-  let clouds = [];
+  let pipes = [];
   let projectiles = [];
 
-  let pipeTimer=0, cloudTimer=0;
+  let pipeTimer = 0;
 
-  const bird = { x: W*0.25, y: H*0.5, r:14, vy:0, vx:0, alive:true };
-
-  const hunter = { x: 60, y: H*0.5, throwTimer: randf(THROW_MIN,THROW_MAX) };
+  const bird = { x: 0, y: 0, r: 14, vy: 0, alive: true };
+  const hunter = { x: 0, y: 0, throwTimer: 0 };
 
   const wind = { dir:'–', strength:0, timer:0, nextIn: randf(4,7) };
 
-  // Input
-// Input
-function flap(){
-  if (state !== 'RUNNING' || !bird.alive) return;
-  bird.vy = FLAP_FORCE;
-  SFX.flap();
-}
-
-cvs.addEventListener('pointerdown', flap);
-
-window.addEventListener('keydown', e => {
-  const key = e.code.toLowerCase();
-
-  // --- Space: flap or cash out if Shift is held ---
-  if (key === 'space') {
-    e.preventDefault();
-    if (e.shiftKey) {
-      FF.cashOut();           // Shift + Space → cash out
-    } else {
-      flap();                 // Space alone → flap
-    }
+  /* ---------- Input ---------- */
+  function flap(){
+    if (state !== 'RUNNING' || !bird.alive) return;
+    bird.vy = FLAP_FORCE;
+    SFX.flap();
   }
 
-  // --- C key: quick cash out ---
-  if (key === 'keyc') {
-    e.preventDefault();
-    FF.cashOut();
+  function bindInputs(){
+    cvs.addEventListener('pointerdown', flap);
+
+    window.addEventListener('keydown', e => {
+      const key = e.code.toLowerCase();
+
+      // Space → flap; Shift+Space or "C" → cash out
+      if (key === 'space') {
+        e.preventDefault();
+        if (e.shiftKey) {
+          window.FF.cashOut();
+        } else {
+          flap();
+        }
+      }
+      if (key === 'keyc') { e.preventDefault(); window.FF.cashOut(); }
+      if (key === 'keym') { e.preventDefault(); SFX.toggle(); }
+      if (e.key.toLowerCase() === 'a') { // toggle admin panel
+        const panel = document.getElementById('adminPanel');
+        if (panel) panel.style.display = (panel.style.display === 'none') ? 'block' : 'none';
+      }
+    });
   }
 
-  // --- M key: mute toggle ---
-  if (key === 'keym') {
-    e.preventDefault();
-    SFX.toggle();
-  }
-});
+  /* ---------- Public API (assigned onto window.FF) ---------- */
+  window.FF.init = function init(){
+    // Query DOM now (after HTML exists)
+    cvs = document.getElementById('game');
+    ctx = cvs.getContext('2d');
+    W = cvs.width; H = cvs.height;
 
-  /* ---------- Public API ---------- */
-  function init(){
-    elTokens.textContent = tokens;
+    elTokens  = document.getElementById('tokens');
+    elBet     = document.getElementById('betInput');
+    btnStart  = document.getElementById('startBtn');
+    btnCash   = document.getElementById('cashBtn');
+
+    elMult    = document.getElementById('mult');
+    elDist    = document.getElementById('dist');
+    elClears  = document.getElementById('clears');
+    elWindBar = document.getElementById('windbar');
+    elWindDir = document.getElementById('windDir');
+
+    overWrap   = document.getElementById('overOverlay');
+    overTitle  = document.getElementById('overTitle');
+    overCaption= document.getElementById('overCaption');
+    overBet    = document.getElementById('overBet');
+    overPayout = document.getElementById('overPayout');
+
+    // initial positions
+    bird.x = W * 0.25;
+    bird.y = H * 0.5;
+    hunter.x = bird.x - HUNTER_OFFSET;
+    hunter.y = bird.y;
+    hunter.throwTimer = randf(THROW_MIN, THROW_MAX);
+
+    // tokens + HUD
     updateHUD();
-  }
 
-  function setBet(v){
-    if(v==='max'){
+    // inputs
+    bindInputs();
+  };
+
+  window.FF.setBet = function setBet(v){
+    // kept for compatibility with earlier HTML
+    if (v === 'max') {
       bet = tokens;
-      elBet.value = tokens;
+      if (elBet) elBet.value = tokens;
     } else {
       bet = Number(v);
-      elBet.value = bet;
+      if (elBet) elBet.value = bet;
     }
-  }
+  };
 
-  function startGame(){
-    const manual = Number(elBet.value);
-    if (manual>0) bet = manual;
+  window.FF.placeBet = function placeBet(v){
+    // newer name (both work)
+    window.FF.setBet(v);
+  };
 
-    if(!bet || bet<=0){ alert('Please place a bet first!'); return; }
-    if(bet>tokens){ alert('Not enough tokens!'); return; }
+  window.FF.startGame = function startGame(){
+    // sync from input if present
+    const manual = Number(elBet && elBet.value);
+    if (manual > 0) bet = manual;
+
+    if (!bet || bet <= 0) { alert('Please place a bet first!'); return; }
+    if (bet > tokens)     { alert('Not enough tokens!');      return; }
 
     tokens -= bet; saveTokens();
 
@@ -167,89 +209,128 @@ window.addEventListener('keydown', e => {
     elapsed=0; lastT=0;
     multiplier = MULT_START;
     distance=0; distSteps=0; clears=0;
-    pipes.length=0; clouds.length=0; projectiles.length=0;
-    pipeTimer=0; cloudTimer=0;
-    bird.y=H*0.5; bird.vy=0; bird.vx=0; bird.alive=true;
-    hunter.x=60; hunter.y=H*0.5; hunter.throwTimer=randf(THROW_MIN,THROW_MAX);
+    pipes.length=0; projectiles.length=0;
+    pipeTimer=0;
+    bird.y=H*0.5; bird.vy=0; bird.alive=true;
+    hunter.x=bird.x - HUNTER_OFFSET; hunter.y=H*0.5; hunter.throwTimer=randf(THROW_MIN,THROW_MAX);
     wind.dir='–'; wind.strength=0; wind.timer=0; wind.nextIn=randf(4,7);
-    overWrap.style.display='none';
-    btnStart.disabled=true; btnCash.disabled=false;
+    if (overWrap) overWrap.style.display='none';
+    if (btnStart) btnStart.disabled=true;
+    if (btnCash)  btnCash.disabled=false;
 
     requestAnimationFrame(ts=>{ lastT=ts/1000; requestAnimationFrame(loop); });
-  }
+  };
 
-  function cashOut(){
-    if(state!=='RUNNING') return;
+  window.FF.cashOut = function cashOut(){
+    if (state!=='RUNNING') return;
+
+    if (multiplier <= 1.0) {
+      alert("❌ You can’t cash out yet — multiplier must rise first!");
+      return;
+    }
+
     state='OVER';
     const payout = Math.max(0, Math.floor(bet * multiplier));
     tokens += payout; saveTokens();
-    btnStart.disabled=false; btnCash.disabled=true;
+    if (btnStart) btnStart.disabled=false;
+    if (btnCash)  btnCash.disabled=true;
 
-    overTitle.textContent='🏆 You Cashed Out!';
-    overCaption.textContent='Great timing!';
-    overBet.textContent=bet; overPayout.textContent=payout;
-    overWrap.style.display='flex';
-  }
+    if (overTitle)  overTitle.textContent='🏆 You Cashed Out!';
+    if (overCaption)overCaption.textContent='Great timing!';
+    if (overBet)    overBet.textContent=bet;
+    if (overPayout) overPayout.textContent=payout;
+    if (overWrap)   overWrap.style.display='flex';
+    SFX.cash();
+  };
 
-  /* ---------- Core Loop ---------- */
+  /* ---------- Admin ---------- */
+  window.FF.applyAdmin = function applyAdmin(){
+    // Read from your Admin Panel inputs if present
+    const g  = document.getElementById('adminGravity');
+    const ff = document.getElementById('adminFlap');
+    const sp = document.getElementById('adminSpeed');
+
+    const mSec  = document.getElementById('adminMultSec');
+    const mPipe = document.getElementById('adminMultPipe');
+    const mDist = document.getElementById('adminMultDist');
+    const mGold = document.getElementById('adminMultGold');
+
+    const gap   = document.getElementById('adminGap');
+    const pint  = document.getElementById('adminPipeInterval');
+
+    const tMin  = document.getElementById('adminThrowMin');
+    const tMax  = document.getElementById('adminThrowMax');
+    const pSpd  = document.getElementById('adminProjSpeed');
+
+    const windPow = document.getElementById('adminWind');
+
+    if (g)   GRAVITY = Number(g.value);
+    if (ff)  FLAP_FORCE = Number(ff.value);
+    if (sp)  BASE_SPEED = Number(sp.value);
+
+    if (mSec)  MULT_PER_SEC = Number(mSec.value);
+    if (mPipe) MULT_PER_PIPE = Number(mPipe.value);
+    if (mDist) MULT_PER_100M = Number(mDist.value);
+    if (mGold) MULT_GOLDEN = Number(mGold.value);
+
+    if (gap)  PIPE_GAP_BASE = Number(gap.value);
+    if (pint) PIPE_INTERVAL = Number(pint.value);
+
+    if (tMin) THROW_MIN = Number(tMin.value);
+    if (tMax) THROW_MAX = Number(tMax.value);
+    if (pSpd) PROJECTILE_SPEED_MULT = Number(pSpd.value) || 1.0;
+
+    if (windPow) { for (const d of DIFF) d.wind = Number(windPow.value); }
+
+    alert("✅ Live settings applied!");
+  };
+
+  /* ---------- Loop ---------- */
   function loop(ts){
     const now = ts/1000, dt = Math.min(0.033, now - lastT); lastT=now;
     if(state==='RUNNING'){ update(dt); draw(); }
     if(state!=='IDLE') requestAnimationFrame(loop);
   }
 
+  /* ---------- Update ---------- */
   function update(dt){
     elapsed += dt;
     const tier = tierFor(elapsed);
 
-    // multiplier growth (time)
+    // Multiplier growth (time)
     multiplier += MULT_PER_SEC * dt * tier.speed;
 
-    // physics
+    // Physics
     bird.vy += GRAVITY * dt;
-    // wind forces
-    if(wind.strength>0){
-      if(wind.dir==='UP'){ bird.vy += -GRAVITY * 0.65 * wind.strength * dt; }
-      if(wind.dir==='LEFT'){ bird.vx = -70 * wind.strength; }
-      if(wind.dir==='RIGHT'){ bird.vx =  70 * wind.strength; }
-    } else { bird.vx *= 0.9; }
 
-    // integrate
+    // (Wind gusts: up/crosswind influences; NO tilt and NO clouds)
+    updateWind(dt, tier);
+
+    // Integrate
     bird.y += bird.vy * dt;
-    bird.x = W * 0.25; // keep bird fixed horizontally (¼ from left edge)
-bird.vx = 0; // neutralize any horizontal drift
+    bird.x  = W * 0.25; // lock horizontally
+    if (bird.y + bird.r >= H-8){ crash('Face-planted the runway!'); return; }
+    if (bird.y - bird.r <= 0){ bird.y = bird.r; bird.vy = 0; }
 
-    // bounds
-    if(bird.y + bird.r >= H-8){ return crash('Face-planted the runway!'); }
-    if(bird.y - bird.r <= 0){ bird.y = bird.r; bird.vy = 0; }
-
-    // timers/spawns
-    pipeTimer -= dt; cloudTimer -= dt;
+    // Spawns
+    pipeTimer -= dt;
     if(pipeTimer<=0){
       spawnPipePair(tier);
-      // faster spawns with difficulty
       pipeTimer = PIPE_INTERVAL / tier.speed;
-    }
-    if(cloudTimer<=0){
-      spawnCloud(tier);
-      cloudTimer = CLOUD_INTERVAL / (0.8 + 0.4*tier.speed);
     }
 
     updateHunter(dt, tier);
-    updateWind(dt, tier);
 
-    // move world
+    // Move world
     const speed = BASE_SPEED * tier.speed;
     for(const p of pipes){ p.x -= speed*dt; }
-    for(const c of clouds){ c.x += c.vx*dt; }
     for(const pr of projectiles){ pr.x += pr.vx*dt; pr.y += pr.vy*dt; }
 
-    // cleanup
+    // Cleanup
     pipes = pipes.filter(p=> p.x + p.w > -10);
-    clouds = clouds.filter(c=> c.x + c.w > -20);
     projectiles = projectiles.filter(pr=> pr.x>-40 && pr.x<W+40 && pr.y>-40 && pr.y<H+40);
 
-    // clears: when bird passes a pipe pair's trailing edge once
+    // Clears (when passing a pair)
     for(let i=0;i<pipes.length;i+=2){
       const top=pipes[i], bot=pipes[i+1]; if(!top||!bot) continue;
       if(!top.passed && (bird.x > top.x + top.w)){
@@ -260,7 +341,7 @@ bird.vx = 0; // neutralize any horizontal drift
       }
     }
 
-    // distance-based multiplier (every 100m)
+    // Distance-based multiplier (every 100m)
     distance += speed*dt*0.25;
     const step = Math.floor(distance/100);
     if(step>distSteps){
@@ -268,7 +349,7 @@ bird.vx = 0; // neutralize any horizontal drift
       distSteps = step;
     }
 
-    // collisions
+    // Collisions
     if(checkCollisions()) return;
 
     updateHUD();
@@ -276,54 +357,57 @@ bird.vx = 0; // neutralize any horizontal drift
 
   /* ---------- Spawning ---------- */
   function spawnPipePair(tier){
-    // gap shrinks slightly with difficulty
     const gap = Math.max(90, PIPE_GAP_BASE * tier.gapMult);
     const gapY = randf(60, H-60);
     const topH = clamp(gapY - gap/2, 30, H-gap-30);
     const botY = gapY + gap/2;
     const botH = clamp(H - botY, 30, H-30);
     const x = W + 50;
-    pipes.push({ x, y:0, w:55, h:topH, passed:false });
-    pipes.push({ x, y:H-botH, w:55, h:botH, passed:false });
+    pipes.push({ x, y:0,    w:55, h:topH,    passed:false });
+    pipes.push({ x, y:H-botH,w:55, h:botH,    passed:false });
   }
 
   function updateHunter(dt, tier){
-  // Always stay fixed distance behind bird
-  const TARGET_OFFSET = 180; // pixels behind
-  hunter.x = bird.x - TARGET_OFFSET;
-  hunter.y += (bird.y - hunter.y) * 0.1; // follow smoothly on Y only
+    // Always fixed behind bird; follow on Y
+    hunter.x = (W * 0.25) - HUNTER_OFFSET;
+    hunter.y += (bird.y - hunter.y) * 0.1;
 
-  hunter.throwTimer -= dt;
-  if (hunter.throwTimer <= 0) {
-    throwProjectile(tier);
-    hunter.throwTimer = randf(THROW_MIN, THROW_MAX) / tier.throws;
+    hunter.throwTimer -= dt;
+    if(hunter.throwTimer<=0){
+      throwProjectile(tier);
+      hunter.throwTimer = randf(THROW_MIN,THROW_MAX) / tier.throws;
+    }
   }
-}
-
 
   function throwProjectile(tier){
     const types = ['boot','hat','pie','goldenEgg'];
     const type = randChoice(types);
-    const s = randf(160, 240) * (0.9 + 0.2*tier.speed);
+    const base = randf(160, 240) * (0.9 + 0.2*tier.speed) * PROJECTILE_SPEED_MULT;
     const ang = Math.atan2(bird.y - hunter.y, bird.x - hunter.x);
     projectiles.push({
       x: hunter.x+22, y:hunter.y, r:10,
-      vx: Math.cos(ang)*s, vy: Math.sin(ang)*s,
+      vx: Math.cos(ang)*base, vy: Math.sin(ang)*base,
       type
     });
   }
 
   function updateWind(dt, tier){
+    // gust timers
     wind.timer -= dt; wind.nextIn -= dt;
-    if(wind.timer<=0){ wind.strength=0; elWindBar.style.width='0%'; }
+    if(wind.timer<=0){ wind.strength=0; if(elWindBar) elWindBar.style.width='0%'; }
     if(wind.nextIn<=0){
       wind.dir = randChoice(['LEFT','RIGHT','UP']);
       wind.strength = randf(0.15, 0.65) * tier.wind;
       wind.timer = randf(1.5, 3.0);
       wind.nextIn = randf(4,8);
       SFX.wind();
-      elWindDir.textContent = wind.dir==='LEFT'?'←': wind.dir==='RIGHT'?'→':'↑';
-      elWindBar.style.width = `${Math.round(Math.min(1,wind.strength)*100)}%`;
+      if (elWindDir) elWindDir.textContent = wind.dir==='LEFT'?'←': wind.dir==='RIGHT'?'→':'↑';
+      if (elWindBar) elWindBar.style.width = `${Math.round(Math.min(1,wind.strength)*100)}%`;
+    }
+
+    // apply vertical wind only (no horizontal drift to keep bird centered)
+    if(wind.strength>0 && wind.dir==='UP'){
+      bird.vy += -GRAVITY * 0.65 * wind.strength * dt;
     }
   }
 
@@ -339,13 +423,8 @@ bird.vx = 0; // neutralize any horizontal drift
     // pipes
     for(const p of pipes){
       if(hitRectCircle(p.x,p.y,p.w,p.h,bird.x,bird.y,bird.r)){
-        return crash('Piped and humbled!');
-      }
-    }
-    // clouds
-    for(const c of clouds){
-      if(c.solid && hitRectCircle(c.x,c.y,c.w,c.h,bird.x,bird.y,bird.r)){
-        return crash('That cloud turned concrete!');
+        crash('Piped and humbled!');
+        return true;
       }
     }
     // projectiles
@@ -357,7 +436,8 @@ bird.vx = 0; // neutralize any horizontal drift
           multiplier += MULT_GOLDEN; SFX.ding();
           projectiles.splice(i,1); i--; continue;
         } else {
-          return crash('Hunter’s throw landed!');
+          crash('Hunter’s throw landed!');
+          return true;
         }
       }
     }
@@ -366,17 +446,19 @@ bird.vx = 0; // neutralize any horizontal drift
 
   function crash(msg){
     state='OVER'; bird.alive=false; SFX.thud();
-    btnStart.disabled=false; btnCash.disabled=true;
-    overTitle.textContent='💥 You Crashed!'; overCaption.textContent=msg||'Ouch.';
-    overBet.textContent=bet; overPayout.textContent=0;
-    overWrap.style.display='flex';
+    if (btnStart) btnStart.disabled=false;
+    if (btnCash)  btnCash.disabled=true;
+    if (overTitle)   overTitle.textContent='💥 You Crashed!';
+    if (overCaption) overCaption.textContent=msg||'Ouch.';
+    if (overBet)     overBet.textContent=bet;
+    if (overPayout)  overPayout.textContent=0;
+    if (overWrap)    overWrap.style.display='flex';
     saveTokens();
-    return true;
   }
 
   /* ---------- Drawing ---------- */
   function draw(){
-    // background gradient darkens over time
+    // dark gradient (no tilt)
     const k = clamp(elapsed/120, 0, 1);
     const top = [Math.round(10*(1-k)+2*k),0,Math.round(24*(1-k)+12*k)];
     const bot = [Math.round(4*(1-k)+1*k),0,Math.round(18*(1-k)+8*k)];
@@ -385,19 +467,8 @@ bird.vx = 0; // neutralize any horizontal drift
     g.addColorStop(1, `rgb(${bot.join(',')})`);
     ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
 
-    // subtle tilt with crosswind
-    ctx.save();
-    const tilt = wind.strength ? (wind.dir==='LEFT'?-1: wind.dir==='RIGHT'?1:0)*0.05 : 0;
-    ctx.translate(W/2,H/2); ctx.rotate(tilt); ctx.translate(-W/2,-H/2);
-
     // ground
     ctx.fillStyle='#0e1a33'; ctx.fillRect(0,H-8,W,8);
-
-    // clouds
-    for(const c of clouds){
-      ctx.fillStyle = c.solid? 'rgba(200,200,255,.9)' : 'rgba(200,200,255,.5)';
-      roundRect(ctx, c.x, c.y, c.w, c.h, 12, true);
-    }
 
     // pipes
     for(const p of pipes){
@@ -415,42 +486,40 @@ bird.vx = 0; // neutralize any horizontal drift
     ctx.strokeStyle = '#ffeb3b';
     ctx.stroke();
 
-    // projectiles
-for (const pr of projectiles) {
-  ctx.save();
-  switch (pr.type) {
-    case 'boot':
-      ctx.fillStyle = '#795548';  // brown rectangle
-      ctx.fillRect(pr.x - 8, pr.y - 5, 16, 10);
-      break;
-    case 'hat':
-      ctx.fillStyle = '#3f51b5';  // blue trapezoid
-      ctx.beginPath();
-      ctx.moveTo(pr.x - 10, pr.y + 5);
-      ctx.lineTo(pr.x, pr.y - 8);
-      ctx.lineTo(pr.x + 10, pr.y + 5);
-      ctx.closePath();
-      ctx.fill();
-      break;
-    case 'pie':
-      ctx.fillStyle = '#ff7043';  // orange semicircle
-      ctx.beginPath();
-      ctx.arc(pr.x, pr.y, 10, 0, Math.PI, false);
-      ctx.fill();
-      break;
-    case 'goldenEgg':
-      ctx.fillStyle = '#ffd700';  // yellow ellipse
-      ctx.beginPath();
-      ctx.ellipse(pr.x, pr.y, 7, 10, 0, 0, Math.PI * 2);
-      ctx.fill();
-      break;
-  }
-  ctx.restore();
-}
-
+    // projectiles (distinct shapes)
+    for (const pr of projectiles) {
+      ctx.save();
+      switch (pr.type) {
+        case 'boot':
+          ctx.fillStyle = '#795548';  // brown rectangle
+          ctx.fillRect(pr.x - 8, pr.y - 5, 16, 10);
+          break;
+        case 'hat':
+          ctx.fillStyle = '#3f51b5';  // blue trapezoid
+          ctx.beginPath();
+          ctx.moveTo(pr.x - 10, pr.y + 5);
+          ctx.lineTo(pr.x, pr.y - 8);
+          ctx.lineTo(pr.x + 10, pr.y + 5);
+          ctx.closePath();
+          ctx.fill();
+          break;
+        case 'pie':
+          ctx.fillStyle = '#ff7043';  // orange semicircle
+          ctx.beginPath();
+          ctx.arc(pr.x, pr.y, 10, 0, Math.PI, false);
+          ctx.fill();
+          break;
+        case 'goldenEgg':
+          ctx.fillStyle = '#ffd700';  // yellow ellipse
+          ctx.beginPath();
+          ctx.ellipse(pr.x, pr.y, 7, 10, 0, 0, Math.PI * 2);
+          ctx.fill();
+          break;
+      }
+      ctx.restore();
     }
 
-    // bird (draw on top)
+    // bird (top)
     ctx.fillStyle = bird.alive ? '#fff200' : '#999';
     ctx.beginPath();
     ctx.arc(bird.x, bird.y, bird.r, 0, Math.PI*2);
@@ -458,8 +527,6 @@ for (const pr of projectiles) {
     ctx.lineWidth = 2;
     ctx.strokeStyle = '#000';
     ctx.stroke();
-
-    ctx.restore(); // remove tilt transform
 
     // HUD overlay text
     ctx.font = '18px Rajdhani';
@@ -469,7 +536,7 @@ for (const pr of projectiles) {
     ctx.fillText(`Mult: ${multiplier.toFixed(2)}×`, 12, 64);
   }
 
-  /* ---------- Drawing helpers ---------- */
+  /* ---------- Drawing helper ---------- */
   function roundRect(ctx, x, y, w, h, r, fill){
     ctx.beginPath();
     ctx.moveTo(x+r, y);
@@ -485,13 +552,13 @@ for (const pr of projectiles) {
     if(fill) ctx.fill(); else ctx.stroke();
   }
 
-  /* ---------- HUD update + save ---------- */
+  /* ---------- HUD & storage ---------- */
   function updateHUD(){
-    elTokens.textContent = tokens;
-    elMult.textContent = multiplier.toFixed(2) + '×';
-    elDist.textContent = Math.floor(distance);
-    elClears.textContent = clears;
-    elWindBar.style.width = `${Math.round(Math.min(1,wind.strength)*100)}%`;
+    if (elTokens) elTokens.textContent = tokens;
+    if (elMult)   elMult.textContent = multiplier.toFixed(2) + '×';
+    if (elDist)   elDist.textContent = Math.floor(distance);
+    if (elClears) elClears.textContent = clears;
+    if (elWindBar) elWindBar.style.width = `${Math.round(Math.min(1,wind.strength)*100)}%`;
   }
 
   function saveTokens(){
@@ -499,44 +566,7 @@ for (const pr of projectiles) {
     updateHUD();
   }
 
-  /* ---------- Return public API ---------- */
-// === ADMIN CONTROLS ===
-function applyAdmin() {
-  GRAVITY = Number(document.getElementById('adminGravity').value);
-  FLAP_FORCE = Number(document.getElementById('adminFlap').value);
-  BASE_SPEED = Number(document.getElementById('adminSpeed').value);
+})(); // end module
 
-  MULT_PER_SEC = Number(document.getElementById('adminMultSec').value);
-  MULT_PER_PIPE = Number(document.getElementById('adminMultPipe').value);
-  MULT_PER_100M = Number(document.getElementById('adminMultDist').value);
-  MULT_GOLDEN = Number(document.getElementById('adminMultGold').value);
-
-  PIPE_GAP_BASE = Number(document.getElementById('adminGap').value);
-  PIPE_INTERVAL = Number(document.getElementById('adminPipeInterval').value);
-
-  THROW_MIN = Number(document.getElementById('adminThrowMin').value);
-  THROW_MAX = Number(document.getElementById('adminThrowMax').value);
-  PROJECTILE_SPEED_MULT = Number(document.getElementById('adminProjSpeed').value) || 1.0;
-
-  for (const d of DIFF) d.wind = Number(document.getElementById('adminWind').value);
-
-  alert("✅ Live settings applied!");
-}
-
-// Toggle admin panel with 'A'
-window.addEventListener("keydown", e => {
-  if (e.key.toLowerCase() === "a") {
-    const panel = document.getElementById("adminPanel");
-    panel.style.display = (panel.style.display === "none") ? "block" : "none";
-  }
-});
-
-return { init, setBet, startGame, cashOut, applyAdmin };
-
-})();
-
-/* ---------- Boot ---------- */
-window.addEventListener('load', ()=>FF.init());
-
-
-
+/* ---------- Boot after DOM ready ---------- */
+window.addEventListener('load', ()=> window.FF.init());
