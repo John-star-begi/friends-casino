@@ -85,6 +85,50 @@
 
   <script src="../js/common.js"></script>
   <script src="../js/flappy.js"></script>
+<!-- 🎛️ ADMIN PANEL (toggle with "A") -->
+<div id="adminPanel" style="display:none" class="admin-panel">
+  <h2>🛠 Flappy Fiasco Admin</h2>
+
+  <div class="admin-section">
+    <h3>Physics</h3>
+    <label>Gravity <input id="adminGravity" type="number" step="10" value="900"></label>
+    <label>Flap Force <input id="adminFlap" type="number" step="10" value="-320"></label>
+    <label>Base Speed <input id="adminSpeed" type="number" step="5" value="150"></label>
+  </div>
+
+  <div class="admin-section">
+    <h3>Multiplier</h3>
+    <label>Per Second <input id="adminMultSec" type="number" step="0.0005" value="0.0015"></label>
+    <label>Per Pipe <input id="adminMultPipe" type="number" step="0.005" value="0.03"></label>
+    <label>Per 100 m <input id="adminMultDist" type="number" step="0.005" value="0.01"></label>
+    <label>Golden Egg Bonus <input id="adminMultGold" type="number" step="0.05" value="0.15"></label>
+  </div>
+
+  <div class="admin-section">
+    <h3>Pipes</h3>
+    <label>Pipe Gap <input id="adminGap" type="number" step="5" value="120"></label>
+    <label>Pipe Interval (sec) <input id="adminPipeInterval" type="number" step="0.1" value="1.4"></label>
+  </div>
+
+  <div class="admin-section">
+    <h3>Hunter</h3>
+    <label>Throw Min (sec) <input id="adminThrowMin" type="number" step="0.1" value="1.6"></label>
+    <label>Throw Max (sec) <input id="adminThrowMax" type="number" step="0.1" value="3.4"></label>
+    <label>Projectile Speed x <input id="adminProjSpeed" type="number" step="0.1" value="1.0"></label>
+  </div>
+
+  <div class="admin-section">
+    <h3>Wind</h3>
+    <label>Wind Power Multiplier <input id="adminWind" type="number" step="0.1" value="1.0"></label>
+  </div>
+
+  <div class="admin-buttons">
+    <button onclick="FF.applyAdmin()">✅ Apply</button>
+    <button onclick="document.getElementById('adminPanel').style.display='none'">✖ Close</button>
+  </div>
+</div>
+
 </body>
 </html>
+
 
