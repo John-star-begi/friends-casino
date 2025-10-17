@@ -461,77 +461,42 @@ bird.vx = 0; // neutralize any horizontal drift
   }
 
   /* ---------- Return public API ---------- */
-  return { init, setBet, startGame, cashOut };
+// === ADMIN CONTROLS ===
+function applyAdmin() {
+  GRAVITY = Number(document.getElementById('adminGravity').value);
+  FLAP_FORCE = Number(document.getElementById('adminFlap').value);
+  BASE_SPEED = Number(document.getElementById('adminSpeed').value);
+
+  MULT_PER_SEC = Number(document.getElementById('adminMultSec').value);
+  MULT_PER_PIPE = Number(document.getElementById('adminMultPipe').value);
+  MULT_PER_100M = Number(document.getElementById('adminMultDist').value);
+  MULT_GOLDEN = Number(document.getElementById('adminMultGold').value);
+
+  PIPE_GAP_BASE = Number(document.getElementById('adminGap').value);
+  PIPE_INTERVAL = Number(document.getElementById('adminPipeInterval').value);
+
+  THROW_MIN = Number(document.getElementById('adminThrowMin').value);
+  THROW_MAX = Number(document.getElementById('adminThrowMax').value);
+  PROJECTILE_SPEED_MULT = Number(document.getElementById('adminProjSpeed').value) || 1.0;
+
+  for (const d of DIFF) d.wind = Number(document.getElementById('adminWind').value);
+
+  alert("✅ Live settings applied!");
+}
+
+// Toggle admin panel with 'A'
+window.addEventListener("keydown", e => {
+  if (e.key.toLowerCase() === "a") {
+    const panel = document.getElementById("adminPanel");
+    panel.style.display = (panel.style.display === "none") ? "block" : "none";
+  }
+});
+
+return { init, setBet, startGame, cashOut, applyAdmin };
+
 })();
 
 /* ---------- Boot ---------- */
 window.addEventListener('load', ()=>FF.init());
-
-/* ==== ADMIN PANEL ==== */
-.admin-panel {
-  position: fixed;
-  right: 30px;
-  bottom: 30px;
-  width: 300px;
-  background: linear-gradient(180deg,#0b0018 0%,#110030 100%);
-  border: 1px solid #6a1b9a;
-  border-radius: 16px;
-  padding: 16px;
-  color: #e0e0ff;
-  font-family: 'Rajdhani', sans-serif;
-  box-shadow: 0 0 20px rgba(187,134,252,.6);
-  z-index: 9999;
-}
-.admin-panel h2 {
-  text-align: center;
-  color: #b388ff;
-  margin-top: 0;
-}
-.admin-section {
-  margin-bottom: 10px;
-  border-top: 1px solid rgba(255,255,255,.15);
-  padding-top: 6px;
-}
-.admin-section h3 {
-  font-size: 0.95rem;
-  color: #80d8ff;
-  margin: 6px 0;
-}
-.admin-panel label {
-  display: flex;
-  justify-content: space-between;
-  font-size: 0.85rem;
-  margin: 3px 0;
-}
-.admin-panel input {
-  width: 80px;
-  text-align: right;
-  background: rgba(25,0,45,.6);
-  border: 1px solid #6a1b9a;
-  border-radius: 8px;
-  color: #e0e0ff;
-}
-.admin-buttons {
-  display: flex;
-  justify-content: space-between;
-  margin-top: 10px;
-}
-.admin-buttons button {
-  flex: 1;
-  margin: 0 3px;
-  background: linear-gradient(90deg,#7f39fb,#03a9f4);
-  color: white;
-  border: none;
-  border-radius: 10px;
-  padding: 6px 10px;
-  cursor: pointer;
-  font-weight: 700;
-  transition: 0.2s;
-}
-.admin-buttons button:hover {
-  transform: scale(1.05);
-  box-shadow: 0 0 10px rgba(127,57,251,.6);
-}
-
 
 
