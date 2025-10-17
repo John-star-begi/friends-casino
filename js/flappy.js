@@ -73,7 +73,7 @@ window.FF = (()=>{
   function tierFor(t){ return DIFF.reduce((a,c)=>t>=c.t?c:a, DIFF[0]); }
 
   // Multiplier tuning
-  const MULT_START = 1.00;
+  const MULT_START = 0.00;
   const MULT_PER_PIPE = 0.06;   // tougher game → slightly higher pipe boost
   const MULT_PER_100M = 0.02;   // per 100m
   const MULT_GOLDEN = 0.30;     // golden egg bonus
@@ -102,16 +102,40 @@ window.FF = (()=>{
   const wind = { dir:'–', strength:0, timer:0, nextIn: randf(4,7) };
 
   // Input
-  function flap(){
-    if(state!=='RUNNING' || !bird.alive) return;
-    bird.vy = FLAP_FORCE;
-    SFX.flap();
+// Input
+function flap(){
+  if (state !== 'RUNNING' || !bird.alive) return;
+  bird.vy = FLAP_FORCE;
+  SFX.flap();
+}
+
+cvs.addEventListener('pointerdown', flap);
+
+window.addEventListener('keydown', e => {
+  const key = e.code.toLowerCase();
+
+  // --- Space: flap or cash out if Shift is held ---
+  if (key === 'space') {
+    e.preventDefault();
+    if (e.shiftKey) {
+      FF.cashOut();           // Shift + Space → cash out
+    } else {
+      flap();                 // Space alone → flap
+    }
   }
-  cvs.addEventListener('pointerdown', flap);
-  window.addEventListener('keydown', e=>{
-    if(e.code==='Space'){ e.preventDefault(); flap(); }
-    if(e.key.toLowerCase()==='m'){ SFX.toggle(); }
-  });
+
+  // --- C key: quick cash out ---
+  if (key === 'keyc') {
+    e.preventDefault();
+    FF.cashOut();
+  }
+
+  // --- M key: mute toggle ---
+  if (key === 'keym') {
+    e.preventDefault();
+    SFX.toggle();
+  }
+});
 
   /* ---------- Public API ---------- */
   function init(){
@@ -263,18 +287,6 @@ bird.vx = 0; // neutralize any horizontal drift
     pipes.push({ x, y:H-botH, w:55, h:botH, passed:false });
   }
 
-  function spawnCloud(tier){
-    const solid = Math.random()<0.12; // 12% solid
-    clouds.push({
-      x: W+60,
-      y: randf(30, H-120),
-      w: randf(60,120),
-      h: randf(25,45),
-      vx: -randf(45, 85) * tier.speed,
-      solid
-    });
-  }
-
   function updateHunter(dt, tier){
   // Always stay fixed distance behind bird
   const TARGET_OFFSET = 180; // pixels behind
@@ -404,11 +416,38 @@ bird.vx = 0; // neutralize any horizontal drift
     ctx.stroke();
 
     // projectiles
-    for(const pr of projectiles){
-      ctx.fillStyle = pr.type==='goldenEgg' ? '#ffd700' : '#ff9800';
+for (const pr of projectiles) {
+  ctx.save();
+  switch (pr.type) {
+    case 'boot':
+      ctx.fillStyle = '#795548';  // brown rectangle
+      ctx.fillRect(pr.x - 8, pr.y - 5, 16, 10);
+      break;
+    case 'hat':
+      ctx.fillStyle = '#3f51b5';  // blue trapezoid
       ctx.beginPath();
-      ctx.arc(pr.x, pr.y, pr.r, 0, Math.PI*2);
+      ctx.moveTo(pr.x - 10, pr.y + 5);
+      ctx.lineTo(pr.x, pr.y - 8);
+      ctx.lineTo(pr.x + 10, pr.y + 5);
+      ctx.closePath();
       ctx.fill();
+      break;
+    case 'pie':
+      ctx.fillStyle = '#ff7043';  // orange semicircle
+      ctx.beginPath();
+      ctx.arc(pr.x, pr.y, 10, 0, Math.PI, false);
+      ctx.fill();
+      break;
+    case 'goldenEgg':
+      ctx.fillStyle = '#ffd700';  // yellow ellipse
+      ctx.beginPath();
+      ctx.ellipse(pr.x, pr.y, 7, 10, 0, 0, Math.PI * 2);
+      ctx.fill();
+      break;
+  }
+  ctx.restore();
+}
+
     }
 
     // bird (draw on top)
@@ -498,5 +537,6 @@ return { init, setBet, startGame, cashOut, applyAdmin };
 
 /* ---------- Boot ---------- */
 window.addEventListener('load', ()=>FF.init());
+
 
 
