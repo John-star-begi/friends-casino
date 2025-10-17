@@ -37,10 +37,11 @@
         Bet:
         <input id="betInput" type="number" min="1" step="1" value="10" />
       </label>
-      <button onclick="FF.setBet(10)">10</button>
-      <button onclick="FF.setBet(25)">25</button>
-      <button onclick="FF.setBet(50)">50</button>
-      <button onclick="FF.setBet('max')">Max</button>
+      <button onclick="FF.placeBet(10)">10</button>
+<button onclick="FF.placeBet(25)">25</button>
+<button onclick="FF.placeBet(50)">50</button>
+<button onclick="FF.placeBet('max')">Max</button>
+
       <button id="startBtn" onclick="FF.startGame()">Start</button>
       <button id="cashBtn" onclick="FF.cashOut()" disabled>💰 Cash Out</button>
       <button onclick="window.location='../index.html'">⬅️ Lobby</button>
@@ -86,3 +87,4 @@
   <script src="../js/flappy.js"></script>
 </body>
 </html>
+
